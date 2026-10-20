@@ -142,6 +142,7 @@ class MainActivity : Activity() {
         backupRow.addView(button("EXPORT BACKUP", false) { exportBackup() }, weighted())
         backupRow.addView(button("IMPORT BACKUP", false) { importBackup() }, weighted())
         actions.addView(backupRow)
+        actions.addView(button("APP SETTINGS & PRIVACY", false) { showAppSettings() }, LinearLayout.LayoutParams(-1, dp(48)))
         actions.addView(button("OPEN OFFICIAL IRCTC", true) { openIrctc() }, LinearLayout.LayoutParams(-1, dp(52)))
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row.addView(button("FILL PASSENGER FORM", false) { fillPassenger() }, weighted())
@@ -207,8 +208,56 @@ class MainActivity : Activity() {
 
     private fun weighted() = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(5) }
 
+    private fun showAppSettings() {
+        val items = arrayOf(
+            "Confirm before filling passenger details: " + if (prefs.getBoolean("confirm_before_fill", true)) "ON" else "OFF",
+            "Clear saved passenger library",
+            "Clear saved journeys",
+            "Clear all local OCEAN data"
+        )
+        AlertDialog.Builder(this).setTitle("App settings & privacy")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> {
+                        val enabled = !prefs.getBoolean("confirm_before_fill", true)
+                        prefs.edit().putBoolean("confirm_before_fill", enabled).apply()
+                        setStatus("Passenger autofill confirmation is " + if (enabled) "ON." else "OFF.")
+                        showAppSettings()
+                    }
+                    1 -> confirmClearData("passenger_library", "saved passenger library")
+                    2 -> confirmClearData("saved_journeys", "saved journeys")
+                    3 -> AlertDialog.Builder(this).setTitle("Clear all local OCEAN data?")
+                        .setMessage("This deletes saved profiles, passengers, journeys and preferences from this device. Export a backup first if needed.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Clear all") { _, _ ->
+                            prefs.edit().clear().apply()
+                            loadProfile()
+                            setStatus("All local OCEAN data cleared.")
+                            Toast.makeText(this, "Local data cleared", Toast.LENGTH_LONG).show()
+                        }.show()
+                }
+            }.setNegativeButton("Close", null).show()
+    }
+
+    private fun confirmClearData(key: String, label: String) {
+        AlertDialog.Builder(this).setTitle("Clear $label?")
+            .setMessage("This cannot be undone unless you have an exported backup.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Clear") { _, _ ->
+                prefs.edit().remove(key).apply()
+                setStatus("Cleared $label from this device.")
+            }.show()
+    }
+
     private fun saveProfile() {
-        prefs.edit().putString("name", name.text.toString().trim()).putString("age", age.text.toString().trim())
+        val passengerName = name.text.toString().trim()
+        val passengerAge = age.text.toString().trim()
+        val passengerGender = gender.text.toString().trim().uppercase()
+        if (passengerName.isBlank() || passengerAge.toIntOrNull() == null || passengerAge.toInt() !in 0..120 || passengerGender !in listOf("M", "F", "T")) {
+            Toast.makeText(this, "Enter a name, valid age and gender (M/F/T) first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        prefs.edit().putString("name", passengerName).putString("age", passengerAge)
             .putString("gender", gender.text.toString().trim().uppercase()).putString("berth", berth.text.toString().trim())
             .putString("phone", phone.text.toString().trim()).putString("email", email.text.toString().trim())
             .putString("from", from.text.toString().trim()).putString("to", to.text.toString().trim())
@@ -485,6 +534,18 @@ class MainActivity : Activity() {
     }
 
     private fun fillPassenger() {
+        if (!browsing) { setStatus("Tap OPEN OFFICIAL IRCTC, sign in, and navigate to the passenger form first."); return }
+        if (prefs.getBoolean("confirm_before_fill", true)) {
+            AlertDialog.Builder(this).setTitle("Fill passenger details?")
+                .setMessage("Review passenger details before continuing. OCEAN fills fields only; verify the form and submit it yourself.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Continue") { _, _ -> fillPassengerFields() }.show()
+            return
+        }
+        fillPassengerFields()
+    }
+
+    private fun fillPassengerFields() {
         if (!browsing) { setStatus("Tap OPEN OFFICIAL IRCTC, sign in, and navigate to the passenger form first."); return }
         val n = name.text.toString().trim(); val a = age.text.toString().trim(); val g = gender.text.toString().trim().uppercase()
         if (n.isBlank() || a.toIntOrNull() == null || g !in listOf("M", "F", "T")) {
