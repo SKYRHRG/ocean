@@ -2,6 +2,7 @@ package com.skyrhrg.oceanandroid
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DatePickerDialog
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
@@ -16,6 +17,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Calendar
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -85,9 +87,19 @@ class MainActivity : Activity() {
         val routes = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         from = field("From station / code", "e.g. SDAH")
         to = field("To station / code", "e.g. NDLS")
-        routes.addView(from, weighted()); routes.addView(to, weighted()); journey.addView(routes)
+        routes.addView(from, weighted()); routes.addView(to, weighted())
+        routes.addView(button("SWAP", false) {
+            val origin = from.text.toString()
+            from.setText(to.text.toString())
+            to.setText(origin)
+            setStatus("Origin and destination swapped. Review both stations.")
+        }, LinearLayout.LayoutParams(dp(76), dp(48)))
+        journey.addView(routes)
         date = field("Journey date", "DD-MM-YYYY")
         date.setText(SimpleDateFormat("dd-MM-yyyy", Locale.US).format(Date()))
+        date.isFocusable = false
+        date.isClickable = true
+        date.setOnClickListener { showDatePicker() }
         journey.addView(date)
         train = field("Train number / name (optional)", "Enter train details")
         journey.addView(train)
@@ -269,6 +281,20 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun showDatePicker() {
+        val calendar = Calendar.getInstance()
+        val current = try {
+            SimpleDateFormat("dd-MM-yyyy", Locale.US).parse(date.text.toString())
+        } catch (_: Exception) { null }
+        if (current != null) calendar.time = current
+        val picker = DatePickerDialog(this, { _, year, month, day ->
+            date.setText(String.format(Locale.US, "%02d-%02d-%04d", day, month + 1, year))
+            setStatus("Journey date selected. Check train availability on the official site.")
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+        picker.datePicker.minDate = System.currentTimeMillis() - 1000
+        picker.show()
     }
 
     private fun saveJourney() {
