@@ -163,15 +163,29 @@ class MainActivity : Activity() {
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                settings.safeBrowsingEnabled = true
+            }
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val host = request?.url?.host?.lowercase() ?: return true
-                    if (host == "irctc.co.in" || host.endsWith(".irctc.co.in")) return false
-                    Toast.makeText(this@MainActivity, "Only IRCTC pages are allowed.", Toast.LENGTH_SHORT).show()
+                    val uri = request?.url ?: return true
+                    val host = uri.host?.lowercase() ?: return true
+                    if (uri.scheme == "https" && (host == "irctc.co.in" || host.endsWith(".irctc.co.in"))) return false
+                    Toast.makeText(this@MainActivity, "Only secure HTTPS IRCTC pages are allowed.", Toast.LENGTH_SHORT).show()
                     return true
                 }
                 override fun onPageFinished(view: WebView?, url: String?) { setStatus("IRCTC loaded. Review journey and passenger details before continuing.") }
+                override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                    handler?.cancel()
+                    setStatus("Secure connection could not be verified. Navigation was blocked.")
+                }
             }
             setBackgroundColor(Color.WHITE); visibility = View.GONE
         }
