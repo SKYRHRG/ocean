@@ -96,6 +96,12 @@ class MainActivity : Activity() {
         quota = field("Quota", "GENERAL")
         opts.addView(coach, weighted()); opts.addView(quota, weighted()); journey.addView(opts)
         body.addView(journey)
+        val journeyLibrary = card()
+        val journeyActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        journeyActions.addView(button("SAVE JOURNEY", true) { saveJourney() }, weighted())
+        journeyActions.addView(button("SAVED JOURNEYS", false) { chooseSavedJourney() }, weighted())
+        journeyLibrary.addView(journeyActions)
+        body.addView(journeyLibrary)
 
         body.addView(section("02", "Passenger profile", "Stored locally on this device"))
         val passenger = card()
@@ -258,6 +264,82 @@ class MainActivity : Activity() {
                     .setPositiveButton("Delete") { _, _ ->
                         prefs.edit().remove("passenger_library").apply()
                         setStatus("Saved passenger library deleted.")
+                    }
+                    .show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun saveJourney() {
+        val origin = from.text.toString().trim()
+        val destination = to.text.toString().trim()
+        val journeyDate = date.text.toString().trim()
+        if (origin.isBlank() || destination.isBlank() || origin.equals(destination, ignoreCase = true)) {
+            Toast.makeText(this, "Enter different From and To stations.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!journeyDate.matches(Regex("\\d{2}-\\d{2}-\\d{4}"))) {
+            Toast.makeText(this, "Use journey date format DD-MM-YYYY.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val journeys = try { JSONArray(prefs.getString("saved_journeys", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+        val journey = JSONObject()
+            .put("from", origin)
+            .put("to", destination)
+            .put("date", journeyDate)
+            .put("train", train.text.toString().trim())
+            .put("class", coach.text.toString().trim())
+            .put("quota", quota.text.toString().trim())
+        var existing = -1
+        for (i in 0 until journeys.length()) {
+            val item = journeys.optJSONObject(i) ?: continue
+            if (item.optString("from").equals(origin, true) &&
+                item.optString("to").equals(destination, true) &&
+                item.optString("date") == journeyDate &&
+                item.optString("train").equals(train.text.toString().trim(), true)) {
+                existing = i
+                break
+            }
+        }
+        if (existing >= 0) journeys.put(existing, journey) else journeys.put(journey)
+        prefs.edit().putString("saved_journeys", journeys.toString()).apply()
+        setStatus(if (existing >= 0) "Saved journey updated on this device." else "Journey saved on this device.")
+        Toast.makeText(this, if (existing >= 0) "Journey updated" else "Journey saved", Toast.LENGTH_SHORT).show()
+        hideKeyboard()
+    }
+
+    private fun chooseSavedJourney() {
+        val journeys = try { JSONArray(prefs.getString("saved_journeys", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+        if (journeys.length() == 0) {
+            Toast.makeText(this, "No saved journeys yet. Fill in journey details and tap SAVE JOURNEY.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val labels = ArrayList<String>()
+        for (i in 0 until journeys.length()) {
+            val item = journeys.optJSONObject(i) ?: JSONObject()
+            labels.add(item.optString("from") + " → " + item.optString("to") + " • " + item.optString("date"))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Saved journeys")
+            .setItems(labels.toTypedArray()) { _, which ->
+                val item = journeys.optJSONObject(which) ?: return@setItems
+                from.setText(item.optString("from"))
+                to.setText(item.optString("to"))
+                date.setText(item.optString("date"))
+                train.setText(item.optString("train"))
+                coach.setText(item.optString("class"))
+                quota.setText(item.optString("quota"))
+                setStatus("Loaded saved journey. Review details before opening IRCTC.")
+            }
+            .setNeutralButton("Delete all") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Delete saved journeys?")
+                    .setMessage("This permanently deletes all saved journeys from this device.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        prefs.edit().remove("saved_journeys").apply()
+                        setStatus("Saved journeys deleted.")
                     }
                     .show()
             }
