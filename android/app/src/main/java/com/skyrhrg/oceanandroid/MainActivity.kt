@@ -255,15 +255,15 @@ class MainActivity : Activity() {
         val passengerGender = gender.text.toString().trim().uppercase()
         val mobile = phone.text.toString().trim()
         val mail = email.text.toString().trim()
-        if (passengerName.isBlank() || passengerAge.toIntOrNull() == null || passengerAge.toInt() !in 0..120 || passengerGender !in listOf("M", "F", "T")) {
+        if (!InputValidators.isValidPassenger(passengerName, passengerAge, passengerGender)) {
             Toast.makeText(this, "Enter a name, valid age and gender (M/F/T) first.", Toast.LENGTH_LONG).show()
             return
         }
-        if (mobile.isNotBlank() && !mobile.matches(Regex("[0-9+() -]{7,20}"))) {
+        if (!InputValidators.isValidOptionalPhone(mobile)) {
             Toast.makeText(this, "Enter a valid mobile number or leave it blank.", Toast.LENGTH_LONG).show()
             return
         }
-        if (mail.isNotBlank() && !android.util.Patterns.EMAIL_ADDRESS.matcher(mail).matches()) {
+        if (!InputValidators.isValidOptionalEmail(mail)) {
             Toast.makeText(this, "Enter a valid email address or leave it blank.", Toast.LENGTH_LONG).show()
             return
         }
@@ -282,8 +282,13 @@ class MainActivity : Activity() {
         val passengerName = name.text.toString().trim()
         val passengerAge = age.text.toString().trim()
         val passengerGender = gender.text.toString().trim().uppercase()
-        if (passengerName.isBlank() || passengerAge.toIntOrNull() == null || passengerAge.toInt() !in 0..120 || passengerGender !in listOf("M", "F", "T")) {
+        if (!InputValidators.isValidPassenger(passengerName, passengerAge, passengerGender)) {
             Toast.makeText(this, "Enter a name, valid age and gender (M/F/T) first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!InputValidators.isValidOptionalPhone(phone.text.toString().trim()) ||
+            !InputValidators.isValidOptionalEmail(email.text.toString().trim())) {
+            Toast.makeText(this, "Check the optional mobile number and email before saving.", Toast.LENGTH_LONG).show()
             return
         }
         val people = try { JSONArray(prefs.getString("passenger_library", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
@@ -366,19 +371,12 @@ class MainActivity : Activity() {
         val origin = from.text.toString().trim()
         val destination = to.text.toString().trim()
         val journeyDate = date.text.toString().trim()
-        if (origin.isBlank() || destination.isBlank() || origin.equals(destination, ignoreCase = true)) {
+        if (!InputValidators.areDistinctStations(origin, destination)) {
             Toast.makeText(this, "Enter different From and To stations.", Toast.LENGTH_LONG).show()
             return
         }
-        val parsedDate = try { SimpleDateFormat("dd-MM-yyyy", Locale.US).apply { isLenient = false }.parse(journeyDate) } catch (_: Exception) { null }
-        if (parsedDate == null || !journeyDate.matches(Regex("\\d{2}-\\d{2}-\\d{4}"))) {
-            Toast.makeText(this, "Enter a real journey date in DD-MM-YYYY format.", Toast.LENGTH_LONG).show()
-            return
-        }
-        val today = SimpleDateFormat("dd-MM-yyyy", Locale.US).format(Date())
-        val todayDate = SimpleDateFormat("dd-MM-yyyy", Locale.US).apply { isLenient = false }.parse(today)
-        if (todayDate != null && parsedDate.before(todayDate)) {
-            Toast.makeText(this, "Journey date cannot be in the past.", Toast.LENGTH_LONG).show()
+        if (!InputValidators.isValidJourneyDate(journeyDate)) {
+            Toast.makeText(this, "Enter a real journey date today or later in DD-MM-YYYY format.", Toast.LENGTH_LONG).show()
             return
         }
         val journeys = try { JSONArray(prefs.getString("saved_journeys", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
