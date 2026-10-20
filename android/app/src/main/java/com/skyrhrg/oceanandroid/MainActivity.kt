@@ -498,29 +498,65 @@ class MainActivity : Activity() {
         try {
             val raw = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
                 ?: throw IllegalStateException("Could not read selected file")
+            if (raw.length > 2_000_000) throw IllegalArgumentException("Backup file is too large (maximum 2 MB).")
             val root = JSONObject(raw)
             if (root.optInt("schemaVersion", -1) != 1) throw IllegalArgumentException("Unsupported backup version")
             val data = root.optJSONObject("data") ?: throw IllegalArgumentException("Backup data missing")
             val allowed = setOf("name","age","gender","berth","phone","email","from","to","date","train","class","quota","passenger_library","saved_journeys")
-            val editor = prefs.edit()
+            val validated = JSONObject()
             val iterator = data.keys()
             while (iterator.hasNext()) {
                 val key = iterator.next()
                 if (key !in allowed) continue
-                when (val value = data.get(key)) {
-                    is String -> editor.putString(key, value)
-                    is Int -> editor.putInt(key, value)
-                    is Boolean -> editor.putBoolean(key, value)
-                    is Long -> editor.putLong(key, value)
-                    else -> if (value is JSONArray || value is JSONObject) editor.putString(key, value.toString())
+                val value = data.get(key)
+                when (key) {
+                    "name", "age", "gender", "berth", "phone", "email", "from", "to", "date", "train", "class", "quota" -> {
+                        if (value !is String) throw IllegalArgumentException("Invalid value type for $key.")
+                        if (value.length > 500) throw IllegalArgumentException("Value for $key is too long.")
+                        validated.put(key, value)
+                    }
+                    "passenger_library" -> {
+                        val arr = if (value is JSONArray) value else if (value is String) JSONArray(value) else throw IllegalArgumentException("Invalid passenger library.")
+                        if (arr.length() > 500) throw IllegalArgumentException("Passenger library contains too many records.")
+                        for (i in 0 until arr.length()) {
+                            val p = arr.optJSONObject(i) ?: throw IllegalArgumentException("Invalid passenger record.")
+                            if (p.optString("name").isBlank() || p.optString("age").toIntOrNull() !in 0..120 || p.optString("gender").uppercase() !in listOf("M","F","T")) {
+                                throw IllegalArgumentException("A saved passenger record is invalid.")
+                            }
+                        }
+                        validated.put(key, arr.toString())
+                    }
+                    "saved_journeys" -> {
+                        val arr = if (value is JSONArray) value else if (value is String) JSONArray(value) else throw IllegalArgumentException("Invalid saved journeys.")
+                        if (arr.length() > 500) throw IllegalArgumentException("Saved journeys contain too many records.")
+                        for (i in 0 until arr.length()) {
+                            val j = arr.optJSONObject(i) ?: throw IllegalArgumentException("Invalid journey record.")
+                            if (j.optString("from").isBlank() || j.optString("to").isBlank() || j.optString("from").equals(j.optString("to"), true)) {
+                                throw IllegalArgumentException("A saved journey record is invalid.")
+                            }
+                        }
+                        validated.put(key, arr.toString())
+                    }
                 }
             }
-            editor.apply()
-            loadProfile()
-            setStatus("Backup imported. Review imported details; existing matching settings may have been replaced.")
-            Toast.makeText(this, "Backup imported", Toast.LENGTH_LONG).show()
+            AlertDialog.Builder(this).setTitle("Import OCEAN backup?")
+                .setMessage("Validated backup found. Importing may replace current values for matching fields. Export your current data first if you want to keep it.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Import") { _, _ ->
+                    val editor = prefs.edit()
+                    val keys = validated.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        editor.putString(key, validated.getString(key))
+                    }
+                    editor.apply()
+                    loadProfile()
+                    setStatus("Backup imported. Review the restored data.")
+                    Toast.makeText(this, "Backup imported", Toast.LENGTH_LONG).show()
+                }.show()
         } catch (e: Exception) {
             setStatus("Backup import failed: " + (e.message ?: "invalid file"))
+            Toast.makeText(this, "Backup import failed: " + (e.message ?: "invalid file"), Toast.LENGTH_LONG).show()
         }
     }
 
