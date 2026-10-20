@@ -14,7 +14,7 @@ object InputValidators {
         phone.isBlank() || phone.matches(Regex("[0-9+() -]{7,20}"))
 
     fun isValidOptionalEmail(email: String): Boolean =
-        email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+        email.isBlank() || email.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))
 
     fun isValidJourneyDate(date: String, now: Date = Date()): Boolean {
         if (!date.matches(Regex("\\d{2}-\\d{2}-\\d{4}"))) return false
