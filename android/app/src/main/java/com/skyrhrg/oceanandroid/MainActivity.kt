@@ -253,8 +253,18 @@ class MainActivity : Activity() {
         val passengerName = name.text.toString().trim()
         val passengerAge = age.text.toString().trim()
         val passengerGender = gender.text.toString().trim().uppercase()
+        val mobile = phone.text.toString().trim()
+        val mail = email.text.toString().trim()
         if (passengerName.isBlank() || passengerAge.toIntOrNull() == null || passengerAge.toInt() !in 0..120 || passengerGender !in listOf("M", "F", "T")) {
             Toast.makeText(this, "Enter a name, valid age and gender (M/F/T) first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (mobile.isNotBlank() && !mobile.matches(Regex("[0-9+() -]{7,20}"))) {
+            Toast.makeText(this, "Enter a valid mobile number or leave it blank.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (mail.isNotBlank() && !android.util.Patterns.EMAIL_ADDRESS.matcher(mail).matches()) {
+            Toast.makeText(this, "Enter a valid email address or leave it blank.", Toast.LENGTH_LONG).show()
             return
         }
         prefs.edit().putString("name", passengerName).putString("age", passengerAge)
@@ -360,8 +370,15 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Enter different From and To stations.", Toast.LENGTH_LONG).show()
             return
         }
-        if (!journeyDate.matches(Regex("\\d{2}-\\d{2}-\\d{4}"))) {
-            Toast.makeText(this, "Use journey date format DD-MM-YYYY.", Toast.LENGTH_LONG).show()
+        val parsedDate = try { SimpleDateFormat("dd-MM-yyyy", Locale.US).apply { isLenient = false }.parse(journeyDate) } catch (_: Exception) { null }
+        if (parsedDate == null || !journeyDate.matches(Regex("\\d{2}-\\d{2}-\\d{4}"))) {
+            Toast.makeText(this, "Enter a real journey date in DD-MM-YYYY format.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val today = SimpleDateFormat("dd-MM-yyyy", Locale.US).format(Date())
+        val todayDate = SimpleDateFormat("dd-MM-yyyy", Locale.US).apply { isLenient = false }.parse(today)
+        if (todayDate != null && parsedDate.before(todayDate)) {
+            Toast.makeText(this, "Journey date cannot be in the past.", Toast.LENGTH_LONG).show()
             return
         }
         val journeys = try { JSONArray(prefs.getString("saved_journeys", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
