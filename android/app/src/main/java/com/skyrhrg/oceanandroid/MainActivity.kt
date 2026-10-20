@@ -3,221 +3,245 @@ package com.skyrhrg.oceanandroid
 import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
+import android.graphics.Typeface
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.content.SharedPreferences
-import android.webkit.WebChromeClient
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.webkit.WebResourceRequest
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
-import android.widget.Toast
+import android.view.inputmethod.InputMethodManager
+import android.webkit.*
+import android.widget.*
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : Activity() {
-    private lateinit var webView: WebView
-    private lateinit var nameInput: EditText
-    private lateinit var ageInput: EditText
-    private lateinit var genderInput: EditText
-    private lateinit var berthInput: EditText
-    private lateinit var status: TextView
     private lateinit var prefs: SharedPreferences
-
-    private val oceanBlue = Color.rgb(20, 78, 150)
+    private lateinit var root: LinearLayout
+    private lateinit var dashboard: ScrollView
+    private lateinit var webView: WebView
+    private lateinit var browserBar: LinearLayout
+    private lateinit var status: TextView
+    private lateinit var from: EditText
+    private lateinit var to: EditText
+    private lateinit var date: EditText
+    private lateinit var train: EditText
+    private lateinit var coach: EditText
+    private lateinit var quota: EditText
+    private lateinit var name: EditText
+    private lateinit var age: EditText
+    private lateinit var gender: EditText
+    private lateinit var berth: EditText
+    private lateinit var phone: EditText
+    private lateinit var email: EditText
+    private var browsing = false
+    private val navy = Color.rgb(15, 35, 67)
+    private val blue = Color.rgb(25, 91, 176)
+    private val gold = Color.rgb(255, 174, 66)
+    private val ink = Color.rgb(28, 42, 62)
+    private val muted = Color.rgb(102, 117, 139)
+    private val canvas = Color.rgb(244, 247, 252)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        prefs = getSharedPreferences("ocean_passenger_profile", Context.MODE_PRIVATE)
+        prefs = getSharedPreferences("ocean_profile_v2", Context.MODE_PRIVATE)
         buildUi()
         loadProfile()
     }
 
+    private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
+
     private fun buildUi() {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(245, 247, 251))
-        }
+        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(canvas) }
+        val header = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(18), dp(20), dp(18)); setBackgroundColor(navy) }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+        brand.addView(TextView(this).apply {
+            text = "O"; textSize = 25f; typeface = Typeface.DEFAULT_BOLD; gravity = android.view.Gravity.CENTER
+            setTextColor(navy); setBackgroundColor(gold)
+        }, LinearLayout.LayoutParams(dp(46), dp(46)))
+        val brandWords = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0) }
+        brandWords.addView(TextView(this).apply { text = "OCEAN"; textSize = 25f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE) })
+        brandWords.addView(TextView(this).apply { text = "SMART TRAIN COMPANION"; textSize = 10f; letterSpacing = 1.3f; setTextColor(Color.rgb(185, 205, 232)) })
+        brand.addView(brandWords)
+        header.addView(brand)
+        header.addView(TextView(this).apply {
+            text = "Plan your journey. Prepare passengers. Stay in control."
+            textSize = 13f; setTextColor(Color.rgb(225, 234, 247)); setPadding(0, dp(14), 0, 0)
+        })
+        root.addView(header)
 
-        val header = TextView(this).apply {
-            text = "OCEAN Android"
-            textSize = 22f
-            setTextColor(Color.WHITE)
-            setBackgroundColor(oceanBlue)
-            setPadding(18, 18, 18, 18)
-        }
-        root.addView(header, LinearLayout.LayoutParams(-1, -2))
+        browserBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(dp(8), dp(4), dp(8), dp(4)); setBackgroundColor(Color.WHITE); visibility = View.GONE }
+        browserBar.addView(button("← BACK", false) { showDashboard() }, LinearLayout.LayoutParams(-2, dp(44)))
+        browserBar.addView(TextView(this).apply { text = "IRCTC BROWSER"; setTextColor(ink); textSize = 12f; typeface = Typeface.DEFAULT_BOLD; setPadding(dp(12), 0, 0, 0) })
+        root.addView(browserBar)
 
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(12, 8, 12, 8)
-        }
-        nameInput = field("Passenger name")
-        ageInput = field("Age")
-        genderInput = field("Gender (M/F)")
-        berthInput = field("Berth preference (optional)")
-        panel.addView(nameInput)
-        panel.addView(ageInput)
-        panel.addView(genderInput)
-        panel.addView(berthInput)
+        dashboard = ScrollView(this)
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(14), dp(16), dp(24)) }
+        body.addView(section("01", "Journey planner", "Enter journey details"))
+        val journey = card()
+        val routes = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        from = field("From station / code", "e.g. SDAH")
+        to = field("To station / code", "e.g. NDLS")
+        routes.addView(from, weighted()); routes.addView(to, weighted()); journey.addView(routes)
+        date = field("Journey date", "DD-MM-YYYY")
+        date.setText(SimpleDateFormat("dd-MM-yyyy", Locale.US).format(Date()))
+        journey.addView(date)
+        train = field("Train number / name (optional)", "Enter train details")
+        journey.addView(train)
+        val opts = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        coach = field("Travel class", "3A / SL / 2A")
+        quota = field("Quota", "GENERAL")
+        opts.addView(coach, weighted()); opts.addView(quota, weighted()); journey.addView(opts)
+        body.addView(journey)
 
-        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        buttons.addView(button("Save profile") { saveProfile() }, weightedParams())
-        buttons.addView(button("Fill passenger form") { fillPassengerForm() }, weightedParams())
-        panel.addView(buttons)
+        body.addView(section("02", "Passenger profile", "Stored locally on this device"))
+        val passenger = card()
+        name = field("Full passenger name", "Passenger name"); passenger.addView(name)
+        val person = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        age = field("Age", "Years"); gender = field("Gender", "M / F / T")
+        person.addView(age, weighted()); person.addView(gender, weighted()); passenger.addView(person)
+        berth = field("Berth preference (optional)", "LOWER / UPPER / etc."); passenger.addView(berth)
+        phone = field("Mobile (optional)", "Contact number"); passenger.addView(phone)
+        email = field("Email (optional)", "Email address"); passenger.addView(email)
+        val saveRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        saveRow.addView(button("SAVE PROFILE", false) { saveProfile() }, weighted())
+        saveRow.addView(button("CLEAR FORM", false) { clearProfile() }, weighted())
+        passenger.addView(saveRow); body.addView(passenger)
 
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(button("Open IRCTC") { openIrctc() }, weightedParams())
-        actions.addView(button("Reload") { webView.reload() }, weightedParams())
-        panel.addView(actions)
+        body.addView(section("03", "Booking workspace", "Security checks and payment stay under your control"))
+        val actions = card()
+        actions.addView(button("OPEN OFFICIAL IRCTC", true) { openIrctc() }, LinearLayout.LayoutParams(-1, dp(52)))
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(button("FILL PASSENGER FORM", false) { fillPassenger() }, weighted())
+        row.addView(button("RELOAD PAGE", false) { if (browsing) webView.reload() else setStatus("Open IRCTC first to reload its page.") }, weighted())
+        actions.addView(row); body.addView(actions)
 
-        status = TextView(this).apply {
-            text = "Ready. Sign in on IRCTC yourself, then use passenger autofill."
-            textSize = 12f
-            setTextColor(Color.DKGRAY)
-            setPadding(4, 6, 4, 6)
-        }
-        panel.addView(status)
-
-        val scroll = ScrollView(this).apply { addView(panel) }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, -2))
+        val statusCard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12)); setBackgroundColor(Color.rgb(232, 240, 252)) }
+        statusCard.addView(TextView(this).apply { text = "STATUS"; textSize = 10f; typeface = Typeface.DEFAULT_BOLD; setTextColor(blue); letterSpacing = 1f })
+        status = TextView(this).apply { text = "Ready to plan. Fill in the journey and passenger details."; textSize = 13f; setTextColor(ink); setPadding(0, dp(5), 0, 0) }
+        statusCard.addView(status); body.addView(statusCard)
+        body.addView(TextView(this).apply {
+            text = "OCEAN Android • Debug build\nThis companion does not bypass website security or guarantee a booking."
+            textSize = 10f; setTextColor(muted); gravity = android.view.Gravity.CENTER; setPadding(0, dp(18), 0, 0)
+        })
+        dashboard.addView(body)
+        root.addView(dashboard, LinearLayout.LayoutParams(-1, 0, 1f))
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.loadsImagesAutomatically = true
+            webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val url = request?.url ?: return true
-                    val host = url.host?.lowercase() ?: return true
+                    val host = request?.url?.host?.lowercase() ?: return true
                     if (host == "irctc.co.in" || host.endsWith(".irctc.co.in")) return false
-                    Toast.makeText(this@MainActivity, "Only IRCTC pages are allowed in this browser.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Only IRCTC pages are allowed.", Toast.LENGTH_SHORT).show()
                     return true
                 }
-
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    status.text = "Page loaded. Passenger details are only filled when you tap the button."
-                }
+                override fun onPageFinished(view: WebView?, url: String?) { setStatus("IRCTC loaded. Review journey and passenger details before continuing.") }
             }
-            webChromeClient = WebChromeClient()
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(Color.WHITE); visibility = View.GONE
         }
         root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
 
-    private fun field(hintText: String): EditText = EditText(this).apply {
-        hint = hintText
-        textSize = 14f
-        isSingleLine = true
-        setPadding(10, 4, 10, 4)
+    private fun section(num: String, title: String, subtitle: String): View {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(10)) }
+        row.addView(TextView(this).apply { text = num; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; gravity = android.view.Gravity.CENTER; setTextColor(navy); setBackgroundColor(gold) }, LinearLayout.LayoutParams(dp(36), dp(36)))
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
+        labels.addView(TextView(this).apply { text = title; textSize = 17f; typeface = Typeface.DEFAULT_BOLD; setTextColor(ink) })
+        labels.addView(TextView(this).apply { text = subtitle; textSize = 11f; setTextColor(muted) })
+        row.addView(labels); return row
     }
 
-    private fun button(label: String, action: () -> Unit): Button = Button(this).apply {
-        text = label
-        textSize = 11f
+    private fun card() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(12)); setBackgroundColor(Color.WHITE); elevation = dp(2).toFloat()
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) }
+    }
+
+    private fun field(label: String, hintText: String) = EditText(this).apply {
+        hint = hintText; contentDescription = label; textSize = 14f; isSingleLine = true
+        setTextColor(ink); setHintTextColor(muted); setPadding(dp(8), dp(5), dp(8), dp(5))
+        backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(205, 214, 226))
+    }
+
+    private fun button(label: String, primary: Boolean, action: () -> Unit) = Button(this).apply {
+        text = label; textSize = 11f; typeface = Typeface.DEFAULT_BOLD
+        setTextColor(if (primary) Color.WHITE else blue)
+        backgroundTintList = android.content.res.ColorStateList.valueOf(if (primary) blue else Color.rgb(235, 241, 250))
         setOnClickListener { action() }
     }
 
-    private fun weightedParams() = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+    private fun weighted() = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(5) }
 
     private fun saveProfile() {
-        prefs.edit()
-            .putString("name", nameInput.text.toString().trim())
-            .putString("age", ageInput.text.toString().trim())
-            .putString("gender", genderInput.text.toString().trim().uppercase())
-            .putString("berth", berthInput.text.toString().trim())
-            .apply()
-        status.text = "Passenger profile saved on this device."
+        prefs.edit().putString("name", name.text.toString().trim()).putString("age", age.text.toString().trim())
+            .putString("gender", gender.text.toString().trim().uppercase()).putString("berth", berth.text.toString().trim())
+            .putString("phone", phone.text.toString().trim()).putString("email", email.text.toString().trim())
+            .putString("from", from.text.toString().trim()).putString("to", to.text.toString().trim())
+            .putString("date", date.text.toString().trim()).putString("train", train.text.toString().trim())
+            .putString("class", coach.text.toString().trim()).putString("quota", quota.text.toString().trim()).apply()
+        setStatus("Profile and journey preferences saved on this device.")
         Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
+        hideKeyboard()
     }
 
     private fun loadProfile() {
-        nameInput.setText(prefs.getString("name", ""))
-        ageInput.setText(prefs.getString("age", ""))
-        genderInput.setText(prefs.getString("gender", ""))
-        berthInput.setText(prefs.getString("berth", ""))
+        name.setText(prefs.getString("name", "")); age.setText(prefs.getString("age", ""))
+        gender.setText(prefs.getString("gender", "")); berth.setText(prefs.getString("berth", ""))
+        phone.setText(prefs.getString("phone", "")); email.setText(prefs.getString("email", ""))
+        from.setText(prefs.getString("from", "")); to.setText(prefs.getString("to", ""))
+        date.setText(prefs.getString("date", SimpleDateFormat("dd-MM-yyyy", Locale.US).format(Date())))
+        train.setText(prefs.getString("train", "")); coach.setText(prefs.getString("class", "")); quota.setText(prefs.getString("quota", "GENERAL"))
+    }
+
+    private fun clearProfile() {
+        listOf(name, age, gender, berth, phone, email).forEach { it.setText("") }
+        setStatus("Passenger fields cleared. Saved preferences remain on this device.")
     }
 
     private fun openIrctc() {
+        hideKeyboard()
+        browsing = true; dashboard.visibility = View.GONE; browserBar.visibility = View.VISIBLE; webView.visibility = View.VISIBLE
+        setStatus("Opening IRCTC. Sign in yourself and complete all official checks.")
         webView.loadUrl("https://www.irctc.co.in/nget/train-search")
-        status.text = "Opening IRCTC. Login and security checks remain under your control."
     }
 
-    private fun fillPassengerForm() {
-        val name = nameInput.text.toString().trim()
-        val age = ageInput.text.toString().trim()
-        val gender = genderInput.text.toString().trim().uppercase()
-        val berth = berthInput.text.toString().trim()
-        if (name.isBlank() || age.isBlank() || gender !in listOf("M", "F", "T")) {
-            Toast.makeText(this, "Enter name, age and gender (M/F/T).", Toast.LENGTH_LONG).show()
-            return
+    private fun showDashboard() {
+        browsing = false; webView.stopLoading(); webView.visibility = View.GONE
+        browserBar.visibility = View.GONE; dashboard.visibility = View.VISIBLE; setStatus("Journey planner ready.")
+    }
+
+    private fun fillPassenger() {
+        if (!browsing) { setStatus("Tap OPEN OFFICIAL IRCTC, sign in, and navigate to the passenger form first."); return }
+        val n = name.text.toString().trim(); val a = age.text.toString().trim(); val g = gender.text.toString().trim().uppercase()
+        if (n.isBlank() || a.toIntOrNull() == null || g !in listOf("M", "F", "T")) {
+            Toast.makeText(this, "Enter passenger name, valid age and gender (M/F/T).", Toast.LENGTH_LONG).show(); return
         }
-        val jsName = jsQuote(name)
-        val jsAge = jsQuote(age)
-        val jsGender = jsQuote(gender)
-        val jsBerth = jsQuote(berth)
-        val script = """
-            (function() {
-              const data = {name:$jsName, age:$jsAge, gender:$jsGender, berth:$jsBerth};
-              const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-              function setValue(el, value) {
-                if (!el || !value) return false;
-                const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-                const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-                if (setter) setter.call(el, value); else el.value = value;
-                el.dispatchEvent(new Event('input', {bubbles:true}));
-                el.dispatchEvent(new Event('change', {bubbles:true}));
-                return true;
-              }
-              const fields = Array.from(document.querySelectorAll('input,select,textarea'));
-              const find = (keys) => fields.find(el => {
-                const label = norm((el.getAttribute('aria-label') || '') + ' ' +
-                  (el.getAttribute('placeholder') || '') + ' ' + (el.name || '') + ' ' +
-                  (el.id || '') + ' ' + (el.labels ? Array.from(el.labels).map(x => x.innerText).join(' ') : ''));
-                return keys.some(k => label.includes(k));
-              });
-              let count = 0;
-              const n = find(['passengername','fullname','psgnname','name']);
-              const a = find(['passengerage','age']);
-              const g = find(['passengergender','gender','sex']);
-              const b = find(['berthpreference','berth']);
-              if (n && setValue(n, data.name)) count++;
-              if (a && setValue(a, data.age)) count++;
-              if (g) {
-                if (g.tagName === 'SELECT') {
-                  const option = Array.from(g.options).find(o => norm(o.value) === norm(data.gender) || norm(o.text) === norm(data.gender) || (data.gender === 'M' && /male/.test(norm(o.text))) || (data.gender === 'F' && /female/.test(norm(o.text))));
-                  if (option) { g.value = option.value; g.dispatchEvent(new Event('change',{bubbles:true})); count++; }
-                } else if (setValue(g, data.gender)) count++;
-              }
-              if (b && data.berth) {
-                if (b.tagName === 'SELECT') {
-                  const option = Array.from(b.options).find(o => norm(o.text).includes(norm(data.berth)) || norm(o.value).includes(norm(data.berth)));
-                  if (option) { b.value = option.value; b.dispatchEvent(new Event('change',{bubbles:true})); count++; }
-                } else if (setValue(b, data.berth)) count++;
-              }
-              return count;
-            })();
-        """.trimIndent()
+        val script = "(function(){const d={name:" + jsQuote(n) + ",age:" + jsQuote(a) + ",gender:" + jsQuote(g) + ",berth:" + jsQuote(berth.text.toString().trim()) + "};" +
+            "const norm=s=>(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');" +
+            "function setv(e,v){if(!e||!v)return false;if(e.tagName==='SELECT'){const o=Array.from(e.options).find(x=>norm(x.value)===norm(v)||norm(x.text)===norm(v)||(v==='M'&&/male/.test(norm(x.text)))||(v==='F'&&/female/.test(norm(x.text))));if(!o)return false;e.value=o.value;}else{const p=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const s=Object.getOwnPropertyDescriptor(p,'value')?.set;if(s)s.call(e,v);else e.value=v;}e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));return true;}" +
+            "const fs=Array.from(document.querySelectorAll('input,select,textarea'));const find=ks=>fs.find(e=>{const l=norm((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('placeholder')||'')+' '+(e.name||'')+' '+(e.id||' ')+' '+(e.labels?Array.from(e.labels).map(x=>x.innerText).join(' '):''));return ks.some(k=>l.includes(k));});let c=0;" +
+            "if(setv(find(['passengername','fullname','psgnname','name']),d.name))c++;if(setv(find(['passengerage','age']),d.age))c++;if(setv(find(['passengergender','gender','sex']),d.gender))c++;if(d.berth&&setv(find(['berthpreference','berth']),d.berth))c++;return c;})()"
         webView.evaluateJavascript(script) { result ->
             val count = result?.trim('"')?.toIntOrNull() ?: 0
-            status.text = if (count > 0) "Filled $count field(s). Review every field before continuing." else "No matching passenger fields found on this page."
+            setStatus(if (count > 0) "Filled $count field(s). Check every value yourself before continuing." else "No matching passenger fields found. Open the passenger details form and try again.")
             Toast.makeText(this, status.text, Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun jsQuote(value: String): String =
-        "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
+    private fun jsQuote(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
+    private fun hideKeyboard() { (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(currentFocus?.windowToken, 0) }
+    private fun setStatus(s: String) { status.text = s }
+
+    @Deprecated("Deprecated in Android")
+    override fun onBackPressed() {
+        if (browsing) { if (webView.canGoBack()) webView.goBack() else showDashboard() } else super.onBackPressed()
+    }
 
     override fun onDestroy() {
-        if (::webView.isInitialized) {
-            webView.stopLoading()
-            webView.destroy()
-        }
+        if (::webView.isInitialized) { webView.stopLoading(); webView.destroy() }
         super.onDestroy()
     }
 }
