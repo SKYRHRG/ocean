@@ -11,8 +11,17 @@ android {
         applicationId 'com.skyrhrg.oceanandroid'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '0.1.0-debug'
+        versionCode 2
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('OCEAN_KEYSTORE_PATH') ?: "$rootDir/ocean-release.jks")
+            storePassword System.getenv('OCEAN_KEYSTORE_PASSWORD') ?: ''
+            keyAlias System.getenv('OCEAN_KEY_ALIAS') ?: ''
+            keyPassword System.getenv('OCEAN_KEY_PASSWORD') ?: ''
+        }
     }
 
     buildTypes {
@@ -21,6 +30,7 @@ android {
             versionNameSuffix '-debug'
         }
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
         }
     }
