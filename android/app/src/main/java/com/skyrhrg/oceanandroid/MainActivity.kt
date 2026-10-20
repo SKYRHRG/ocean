@@ -11,6 +11,8 @@ import android.content.SharedPreferences
 import android.view.inputmethod.InputMethodManager
 import android.webkit.*
 import android.widget.*
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -106,7 +108,12 @@ class MainActivity : Activity() {
         val saveRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         saveRow.addView(button("SAVE PROFILE", false) { saveProfile() }, weighted())
         saveRow.addView(button("CLEAR FORM", false) { clearProfile() }, weighted())
-        passenger.addView(saveRow); body.addView(passenger)
+        passenger.addView(saveRow)
+        val libraryRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        libraryRow.addView(button("SAVE PASSENGER", true) { savePassengerToLibrary() }, weighted())
+        libraryRow.addView(button("CHOOSE SAVED", false) { chooseSavedPassenger() }, weighted())
+        passenger.addView(libraryRow)
+        body.addView(passenger)
 
         body.addView(section("03", "Booking workspace", "Security checks and payment stay under your control"))
         val actions = card()
@@ -185,6 +192,76 @@ class MainActivity : Activity() {
         setStatus("Profile and journey preferences saved on this device.")
         Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
         hideKeyboard()
+    }
+
+    private fun savePassengerToLibrary() {
+        val passengerName = name.text.toString().trim()
+        val passengerAge = age.text.toString().trim()
+        val passengerGender = gender.text.toString().trim().uppercase()
+        if (passengerName.isBlank() || passengerAge.toIntOrNull() == null || passengerAge.toInt() !in 0..120 || passengerGender !in listOf("M", "F", "T")) {
+            Toast.makeText(this, "Enter a name, valid age and gender (M/F/T) first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val people = try { JSONArray(prefs.getString("passenger_library", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+        val person = JSONObject()
+            .put("name", passengerName)
+            .put("age", passengerAge)
+            .put("gender", passengerGender)
+            .put("berth", berth.text.toString().trim())
+            .put("phone", phone.text.toString().trim())
+            .put("email", email.text.toString().trim())
+        var replaced = false
+        for (i in 0 until people.length()) {
+            val old = people.optJSONObject(i) ?: continue
+            if (old.optString("name").equals(passengerName, ignoreCase = true) && old.optString("age") == passengerAge) {
+                people.put(i, person)
+                replaced = true
+                break
+            }
+        }
+        if (!replaced) people.put(person)
+        prefs.edit().putString("passenger_library", people.toString()).apply()
+        setStatus(if (replaced) "Saved passenger profile updated on this device." else "Passenger added to this device's saved passenger library.")
+        Toast.makeText(this, if (replaced) "Passenger updated" else "Passenger saved", Toast.LENGTH_SHORT).show()
+        hideKeyboard()
+    }
+
+    private fun chooseSavedPassenger() {
+        val people = try { JSONArray(prefs.getString("passenger_library", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+        if (people.length() == 0) {
+            Toast.makeText(this, "No saved passengers yet. Fill the form and tap SAVE PASSENGER.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val labels = ArrayList<String>()
+        for (i in 0 until people.length()) {
+            val p = people.optJSONObject(i) ?: JSONObject()
+            labels.add(p.optString("name", "Unnamed") + " • " + p.optString("age", "") + " • " + p.optString("gender", ""))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Choose saved passenger")
+            .setItems(labels.toTypedArray()) { _, which ->
+                val p = people.optJSONObject(which) ?: return@setItems
+                name.setText(p.optString("name"))
+                age.setText(p.optString("age"))
+                gender.setText(p.optString("gender"))
+                berth.setText(p.optString("berth"))
+                phone.setText(p.optString("phone"))
+                email.setText(p.optString("email"))
+                setStatus("Loaded " + p.optString("name") + " from the saved passenger library. Review details before use.")
+            }
+            .setNeutralButton("Delete all") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Delete saved passengers?")
+                    .setMessage("This permanently deletes all saved passenger profiles from this device.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        prefs.edit().remove("passenger_library").apply()
+                        setStatus("Saved passenger library deleted.")
+                    }
+                    .show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun loadProfile() {
