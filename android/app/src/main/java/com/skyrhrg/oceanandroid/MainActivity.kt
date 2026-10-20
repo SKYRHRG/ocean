@@ -379,16 +379,15 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private val exportBackupLauncher = registerForActivityResult(android.app.ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) writeBackup(uri)
-    }
-    private val importBackupLauncher = registerForActivityResult(android.app.ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) readBackup(uri)
-    }
-
     private fun exportBackup() {
         val filename = "ocean-backup-" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".json"
-        exportBackupLauncher.launch(filename)
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, filename)
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, REQUEST_EXPORT_BACKUP)
     }
 
     private fun writeBackup(uri: Uri) {
@@ -409,7 +408,24 @@ class MainActivity : Activity() {
     }
 
     private fun importBackup() {
-        importBackupLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/json", "text/plain"))
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, REQUEST_IMPORT_BACKUP)
+    }
+
+    @Deprecated("Deprecated in Android")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        when (requestCode) {
+            REQUEST_EXPORT_BACKUP -> writeBackup(uri)
+            REQUEST_IMPORT_BACKUP -> readBackup(uri)
+        }
     }
 
     private fun readBackup(uri: Uri) {
@@ -489,6 +505,11 @@ class MainActivity : Activity() {
     private fun jsQuote(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
     private fun hideKeyboard() { (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(currentFocus?.windowToken, 0) }
     private fun setStatus(s: String) { status.text = s }
+
+    companion object {
+        private const val REQUEST_EXPORT_BACKUP = 4101
+        private const val REQUEST_IMPORT_BACKUP = 4102
+    }
 
     @Deprecated("Deprecated in Android")
     override fun onBackPressed() {
