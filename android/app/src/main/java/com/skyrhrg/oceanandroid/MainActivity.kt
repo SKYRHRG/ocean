@@ -9,6 +9,8 @@ import android.graphics.Typeface
 import android.view.View
 import android.view.ViewGroup
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.SharedPreferences
 import android.view.inputmethod.InputMethodManager
 import android.webkit.*
@@ -136,6 +138,10 @@ class MainActivity : Activity() {
 
         body.addView(section("03", "Booking workspace", "Security checks and payment stay under your control"))
         val actions = card()
+        val backupRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        backupRow.addView(button("EXPORT BACKUP", false) { exportBackup() }, weighted())
+        backupRow.addView(button("IMPORT BACKUP", false) { importBackup() }, weighted())
+        actions.addView(backupRow)
         actions.addView(button("OPEN OFFICIAL IRCTC", true) { openIrctc() }, LinearLayout.LayoutParams(-1, dp(52)))
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row.addView(button("FILL PASSENGER FORM", false) { fillPassenger() }, weighted())
@@ -371,6 +377,69 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private val exportBackupLauncher = registerForActivityResult(android.app.ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) writeBackup(uri)
+    }
+    private val importBackupLauncher = registerForActivityResult(android.app.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) readBackup(uri)
+    }
+
+    private fun exportBackup() {
+        val filename = "ocean-backup-" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".json"
+        exportBackupLauncher.launch(filename)
+    }
+
+    private fun writeBackup(uri: Uri) {
+        try {
+            val root = JSONObject()
+            root.put("schemaVersion", 1)
+            root.put("exportedAt", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date()))
+            val keys = listOf("name","age","gender","berth","phone","email","from","to","date","train","class","quota","passenger_library","saved_journeys")
+            val data = JSONObject()
+            keys.forEach { key -> if (prefs.contains(key)) data.put(key, prefs.all[key]) }
+            root.put("data", data)
+            contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(root.toString(2)) }
+            setStatus("Backup exported. Store the file somewhere private; it may contain personal information.")
+            Toast.makeText(this, "Backup exported", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            setStatus("Backup export failed: " + (e.message ?: "unknown error"))
+        }
+    }
+
+    private fun importBackup() {
+        importBackupLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
+    }
+
+    private fun readBackup(uri: Uri) {
+        try {
+            val raw = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                ?: throw IllegalStateException("Could not read selected file")
+            val root = JSONObject(raw)
+            if (root.optInt("schemaVersion", -1) != 1) throw IllegalArgumentException("Unsupported backup version")
+            val data = root.optJSONObject("data") ?: throw IllegalArgumentException("Backup data missing")
+            val allowed = setOf("name","age","gender","berth","phone","email","from","to","date","train","class","quota","passenger_library","saved_journeys")
+            val editor = prefs.edit()
+            val iterator = data.keys()
+            while (iterator.hasNext()) {
+                val key = iterator.next()
+                if (key !in allowed) continue
+                when (val value = data.get(key)) {
+                    is String -> editor.putString(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Long -> editor.putLong(key, value)
+                    else -> if (value is JSONArray || value is JSONObject) editor.putString(key, value.toString())
+                }
+            }
+            editor.apply()
+            loadProfile()
+            setStatus("Backup imported. Review imported details; existing matching settings may have been replaced.")
+            Toast.makeText(this, "Backup imported", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            setStatus("Backup import failed: " + (e.message ?: "invalid file"))
+        }
     }
 
     private fun loadProfile() {
