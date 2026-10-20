@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.net.http.SslError
 import android.content.SharedPreferences
 import android.view.inputmethod.InputMethodManager
 import android.webkit.*
